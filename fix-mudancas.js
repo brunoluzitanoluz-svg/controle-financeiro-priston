@@ -1,8 +1,11 @@
-'use client'
+const fs = require('fs')
+
+const content = `'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 import Link from 'next/link'
 import { TrendingUp, TrendingDown, AlertCircle, Users, Bell, Download } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -16,7 +19,7 @@ type Alerta = {
 
 export default function Home() {
   const hoje = new Date()
-  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
+  const mesAtual = \`\${hoje.getFullYear()}-\${String(hoje.getMonth() + 1).padStart(2, '0')}\`
 
   const [mes, setMes] = useState(mesAtual)
   const [receitas, setReceitas] = useState(0)
@@ -28,13 +31,25 @@ export default function Home() {
   const [valesCaio, setValesCaio] = useState(0)
   const [valesCharles, setValesCharles] = useState(0)
   const [valesBruno, setValesBruno] = useState(0)
+  const [grafico, setGrafico] = useState<any[]>([])
   const [alertas, setAlertas] = useState<Alerta[]>([])
   const [dadosExport, setDadosExport] = useState<any>({ receitas: [], despesas: [], contas_pagar: [], salarios: [] })
 
+  function getMeses() {
+    const meses = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1)
+      const valor = \`\${d.getFullYear()}-\${String(d.getMonth() + 1).padStart(2, '0')}\`
+      const label = d.toLocaleString('pt-BR', { month: 'short' })
+      meses.push({ valor, label })
+    }
+    return meses
+  }
+
   useEffect(() => {
     async function carregar() {
-      const inicio = `${mes}-01`
-      const fim = `${mes}-31`
+      const inicio = \`\${mes}-01\`
+      const fim = \`\${mes}-31\`
 
       const { data: r } = await supabase.from('receitas').select('*').gte('data', inicio).lte('data', fim)
       if (r) { setReceitas(r.reduce((acc, x) => acc + x.valor, 0)); setDadosExport((p: any) => ({ ...p, receitas: r })) }
@@ -56,6 +71,20 @@ export default function Home() {
         setDadosExport((p: any) => ({ ...p, salarios: s }))
       }
 
+      const meses = getMeses()
+      const dadosGrafico = await Promise.all(meses.map(async m => {
+        const ini = \`\${m.valor}-01\`
+        const fim2 = \`\${m.valor}-31\`
+        const { data: rec } = await supabase.from('receitas').select('valor').gte('data', ini).lte('data', fim2)
+        const { data: desp } = await supabase.from('despesas').select('valor').gte('data', ini).lte('data', fim2)
+        return {
+          mes: m.label,
+          Receitas: rec ? rec.reduce((acc, x) => acc + x.valor, 0) : 0,
+          Despesas: desp ? desp.reduce((acc, x) => acc + x.valor, 0) : 0,
+        }
+      }))
+      setGrafico(dadosGrafico)
+
       const daqui30 = new Date()
       daqui30.setDate(daqui30.getDate() + 30)
       const daqui30str = daqui30.toISOString().split('T')[0]
@@ -63,7 +92,10 @@ export default function Home() {
 
       const { data: alertasPagar } = await supabase.from('contas_pagar').select('id, descricao, valor, vencimento').eq('status', 'pendente').lte('vencimento', daqui30str).gte('vencimento', hojestr)
 
-      setAlertas((alertasPagar || []).map(x => ({ ...x, tipo: 'pagar' })))
+      const lista: Alerta[] = [
+        ...(alertasPagar || []).map(x => ({ ...x, tipo: 'pagar' })),
+      ]
+      setAlertas(lista)
     }
     carregar()
   }, [mes])
@@ -74,11 +106,11 @@ export default function Home() {
 
     doc.setFontSize(18)
     doc.setTextColor(40, 40, 40)
-    doc.text(`Relatorio Financeiro - ${mesLabel}`, 14, 20)
+    doc.text(\`Relatorio Financeiro - \${mesLabel}\`, 14, 20)
 
     doc.setFontSize(11)
     doc.setTextColor(100)
-    doc.text(`Saldo: R$ ${(receitas - despesas).toFixed(2)}   Receitas: R$ ${receitas.toFixed(2)}   Despesas: R$ ${despesas.toFixed(2)}`, 14, 30)
+    doc.text(\`Saldo: R$ \${(receitas - despesas).toFixed(2)}   Receitas: R$ \${receitas.toFixed(2)}   Despesas: R$ \${despesas.toFixed(2)}\`, 14, 30)
 
     if (dadosExport.receitas.length > 0) {
       doc.setFontSize(13)
@@ -87,7 +119,7 @@ export default function Home() {
       autoTable(doc, {
         startY: 48,
         head: [['Descricao', 'Valor', 'Data']],
-        body: dadosExport.receitas.map((x: any) => [x.descricao, `R$ ${x.valor.toFixed(2)}`, x.data]),
+        body: dadosExport.receitas.map((x: any) => [x.descricao, \`R$ \${x.valor.toFixed(2)}\`, x.data]),
         styles: { fontSize: 10 },
         headStyles: { fillColor: [52, 211, 153] },
       })
@@ -101,7 +133,7 @@ export default function Home() {
       autoTable(doc, {
         startY: y + 4,
         head: [['Descricao', 'Valor', 'Data']],
-        body: dadosExport.despesas.map((x: any) => [x.descricao, `R$ ${x.valor.toFixed(2)}`, x.data]),
+        body: dadosExport.despesas.map((x: any) => [x.descricao, \`R$ \${x.valor.toFixed(2)}\`, x.data]),
         styles: { fontSize: 10 },
         headStyles: { fillColor: [248, 113, 113] },
       })
@@ -115,13 +147,13 @@ export default function Home() {
       autoTable(doc, {
         startY: y + 4,
         head: [['Socio', 'Tipo', 'Valor', 'Status']],
-        body: dadosExport.salarios.map((x: any) => [x.socio, x.tipo, `R$ ${x.valor.toFixed(2)}`, x.status]),
+        body: dadosExport.salarios.map((x: any) => [x.socio, x.tipo, \`R$ \${x.valor.toFixed(2)}\`, x.status]),
         styles: { fontSize: 10 },
         headStyles: { fillColor: [167, 139, 250] },
       })
     }
 
-    doc.save(`relatorio-${mes}.pdf`)
+    doc.save(\`relatorio-\${mes}.pdf\`)
   }
 
   const saldo = receitas - despesas
@@ -180,7 +212,7 @@ export default function Home() {
 
         <div className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6 mb-8">
           <p className="text-gray-400 text-sm mb-1">Saldo do mes</p>
-          <p className={`text-4xl font-bold ${saldo >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <p className={\`text-4xl font-bold \${saldo >= 0 ? 'text-emerald-400' : 'text-rose-400'}\`}>
             R$ {saldo.toFixed(2)}
           </p>
         </div>
@@ -190,14 +222,28 @@ export default function Home() {
             const Icon = card.icon
             return (
               <Link key={card.titulo} href={card.href} className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6 hover:border-indigo-500 transition-colors">
-                <div className={`w-10 h-10 ${card.bg} rounded-xl flex items-center justify-center mb-4`}>
-                  <Icon className={`w-5 h-5 ${card.cor}`} />
+                <div className={\`w-10 h-10 \${card.bg} rounded-xl flex items-center justify-center mb-4\`}>
+                  <Icon className={\`w-5 h-5 \${card.cor}\`} />
                 </div>
                 <p className="text-gray-400 text-sm">{card.titulo}</p>
-                <p className={`text-2xl font-bold mt-1 ${card.cor}`}>R$ {card.valor.toFixed(2)}</p>
+                <p className={\`text-2xl font-bold mt-1 \${card.cor}\`}>R$ {card.valor.toFixed(2)}</p>
               </Link>
             )
           })}
+        </div>
+
+        <div className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6 mb-8">
+          <p className="text-white font-semibold mb-6">Receitas x Despesas (ultimos 6 meses)</p>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={grafico} barGap={4}>
+              <XAxis dataKey="mes" tick={{ fill: '#6b7280', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#6b7280', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={v => \`R$\${v}\`} />
+              <Tooltip contentStyle={{ backgroundColor: '#0f1117', border: '1px solid #2a2d3e', borderRadius: 12, color: '#fff' }} formatter={(v: any) => \`R$ \${Number(v).toFixed(2)}\`} />
+              <Legend wrapperStyle={{ color: '#9ca3af', fontSize: 12 }} />
+              <Bar dataKey="Receitas" fill="#34d399" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="Despesas" fill="#f87171" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
 
         <div className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6">
@@ -229,4 +275,7 @@ export default function Home() {
       </div>
     </main>
   )
-}
+}`
+
+fs.writeFileSync('app/page.tsx', content, 'utf8')
+console.log('Mudancas aplicadas com sucesso!')

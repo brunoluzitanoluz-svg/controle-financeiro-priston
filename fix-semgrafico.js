@@ -1,4 +1,6 @@
-'use client'
+const fs = require('fs')
+
+const content = `'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 import Link from 'next/link'
@@ -16,7 +18,7 @@ type Alerta = {
 
 export default function Home() {
   const hoje = new Date()
-  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
+  const mesAtual = \`\${hoje.getFullYear()}-\${String(hoje.getMonth() + 1).padStart(2, '0')}\`
 
   const [mes, setMes] = useState(mesAtual)
   const [receitas, setReceitas] = useState(0)
@@ -33,8 +35,8 @@ export default function Home() {
 
   useEffect(() => {
     async function carregar() {
-      const inicio = `${mes}-01`
-      const fim = `${mes}-31`
+      const inicio = \`\${mes}-01\`
+      const fim = \`\${mes}-31\`
 
       const { data: r } = await supabase.from('receitas').select('*').gte('data', inicio).lte('data', fim)
       if (r) { setReceitas(r.reduce((acc, x) => acc + x.valor, 0)); setDadosExport((p: any) => ({ ...p, receitas: r })) }
@@ -74,11 +76,11 @@ export default function Home() {
 
     doc.setFontSize(18)
     doc.setTextColor(40, 40, 40)
-    doc.text(`Relatorio Financeiro - ${mesLabel}`, 14, 20)
+    doc.text(\`Relatorio Financeiro - \${mesLabel}\`, 14, 20)
 
     doc.setFontSize(11)
     doc.setTextColor(100)
-    doc.text(`Saldo: R$ ${(receitas - despesas).toFixed(2)}   Receitas: R$ ${receitas.toFixed(2)}   Despesas: R$ ${despesas.toFixed(2)}`, 14, 30)
+    doc.text(\`Saldo: R$ \${(receitas - despesas).toFixed(2)}   Receitas: R$ \${receitas.toFixed(2)}   Despesas: R$ \${despesas.toFixed(2)}\`, 14, 30)
 
     if (dadosExport.receitas.length > 0) {
       doc.setFontSize(13)
@@ -87,7 +89,7 @@ export default function Home() {
       autoTable(doc, {
         startY: 48,
         head: [['Descricao', 'Valor', 'Data']],
-        body: dadosExport.receitas.map((x: any) => [x.descricao, `R$ ${x.valor.toFixed(2)}`, x.data]),
+        body: dadosExport.receitas.map((x: any) => [x.descricao, \`R$ \${x.valor.toFixed(2)}\`, x.data]),
         styles: { fontSize: 10 },
         headStyles: { fillColor: [52, 211, 153] },
       })
@@ -101,7 +103,7 @@ export default function Home() {
       autoTable(doc, {
         startY: y + 4,
         head: [['Descricao', 'Valor', 'Data']],
-        body: dadosExport.despesas.map((x: any) => [x.descricao, `R$ ${x.valor.toFixed(2)}`, x.data]),
+        body: dadosExport.despesas.map((x: any) => [x.descricao, \`R$ \${x.valor.toFixed(2)}\`, x.data]),
         styles: { fontSize: 10 },
         headStyles: { fillColor: [248, 113, 113] },
       })
@@ -115,13 +117,13 @@ export default function Home() {
       autoTable(doc, {
         startY: y + 4,
         head: [['Socio', 'Tipo', 'Valor', 'Status']],
-        body: dadosExport.salarios.map((x: any) => [x.socio, x.tipo, `R$ ${x.valor.toFixed(2)}`, x.status]),
+        body: dadosExport.salarios.map((x: any) => [x.socio, x.tipo, \`R$ \${x.valor.toFixed(2)}\`, x.status]),
         styles: { fontSize: 10 },
         headStyles: { fillColor: [167, 139, 250] },
       })
     }
 
-    doc.save(`relatorio-${mes}.pdf`)
+    doc.save(\`relatorio-\${mes}.pdf\`)
   }
 
   const saldo = receitas - despesas
@@ -180,7 +182,7 @@ export default function Home() {
 
         <div className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6 mb-8">
           <p className="text-gray-400 text-sm mb-1">Saldo do mes</p>
-          <p className={`text-4xl font-bold ${saldo >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <p className={\`text-4xl font-bold \${saldo >= 0 ? 'text-emerald-400' : 'text-rose-400'}\`}>
             R$ {saldo.toFixed(2)}
           </p>
         </div>
@@ -190,11 +192,11 @@ export default function Home() {
             const Icon = card.icon
             return (
               <Link key={card.titulo} href={card.href} className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6 hover:border-indigo-500 transition-colors">
-                <div className={`w-10 h-10 ${card.bg} rounded-xl flex items-center justify-center mb-4`}>
-                  <Icon className={`w-5 h-5 ${card.cor}`} />
+                <div className={\`w-10 h-10 \${card.bg} rounded-xl flex items-center justify-center mb-4\`}>
+                  <Icon className={\`w-5 h-5 \${card.cor}\`} />
                 </div>
                 <p className="text-gray-400 text-sm">{card.titulo}</p>
-                <p className={`text-2xl font-bold mt-1 ${card.cor}`}>R$ {card.valor.toFixed(2)}</p>
+                <p className={\`text-2xl font-bold mt-1 \${card.cor}\`}>R$ {card.valor.toFixed(2)}</p>
               </Link>
             )
           })}
@@ -229,4 +231,7 @@ export default function Home() {
       </div>
     </main>
   )
-}
+}`
+
+fs.writeFileSync('app/page.tsx', content, 'utf8')
+console.log('Grafico removido com sucesso!')

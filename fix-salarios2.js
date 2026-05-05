@@ -1,4 +1,6 @@
-'use client'
+const fs = require('fs')
+
+const content = `'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import Link from 'next/link'
@@ -105,9 +107,9 @@ export default function Salarios() {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <p className="text-white font-medium">{r.mes}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.tipo === 'vale' ? 'bg-orange-400/10 text-orange-400' : 'bg-purple-400/10 text-purple-400'}`}>{r.tipo}</span>
+                        <span className={\`text-xs px-2 py-0.5 rounded-full font-medium \${r.tipo === 'vale' ? 'bg-orange-400/10 text-orange-400' : 'bg-purple-400/10 text-purple-400'}\`}>{r.tipo}</span>
                       </div>
-                      <button onClick={() => alterarStatus(r.id, r.status === 'pago' ? 'pendente' : 'pago')} className={`text-xs px-2 py-0.5 rounded-full font-medium transition-colors ${r.status === 'pago' ? 'bg-emerald-400/10 text-emerald-400' : 'bg-yellow-400/10 text-yellow-400'}`}>
+                      <button onClick={() => alterarStatus(r.id, r.status === 'pago' ? 'pendente' : 'pago')} className={\`text-xs px-2 py-0.5 rounded-full font-medium transition-colors \${r.status === 'pago' ? 'bg-emerald-400/10 text-emerald-400' : 'bg-yellow-400/10 text-yellow-400'}\`}>
                         {r.status}
                       </button>
                     </div>
@@ -126,4 +128,7 @@ export default function Salarios() {
       </div>
     </main>
   )
-}
+}`
+
+fs.writeFileSync('app/salarios/page.tsx', content, 'utf8')
+console.log('Pagina de salarios atualizada com sucesso!')
