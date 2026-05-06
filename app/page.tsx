@@ -62,7 +62,6 @@ export default function Home() {
       const hojestr = hoje.toISOString().split('T')[0]
 
       const { data: alertasPagar } = await supabase.from('contas_pagar').select('id, descricao, valor, vencimento').eq('status', 'pendente').lte('vencimento', daqui30str).gte('vencimento', hojestr)
-
       setAlertas((alertasPagar || []).map(x => ({ ...x, tipo: 'pagar' })))
     }
     carregar()
@@ -71,57 +70,247 @@ export default function Home() {
   function exportarPDF() {
     const doc = new jsPDF()
     const mesLabel = new Date(mes + '-01').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })
+    const dataGeracao = hoje.toLocaleDateString('pt-BR')
+    const saldo = receitas - despesas
+    const totalSalarios = [salariosCaio, salariosCharles, salariosBruno].reduce((a, b) => a + b, 0)
+    const totalVales = [valesCaio, valesCharles, valesBruno].reduce((a, b) => a + b, 0)
+    const pageWidth = doc.internal.pageSize.getWidth()
 
-    doc.setFontSize(18)
-    doc.setTextColor(40, 40, 40)
-    doc.text(`Relatorio Financeiro - ${mesLabel}`, 14, 20)
-
+    // Cabeçalho
+    doc.setFillColor(20, 20, 40)
+    doc.rect(0, 0, pageWidth, 38, 'F')
+    doc.setFontSize(20)
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Aorus Tale', 14, 16)
     doc.setFontSize(11)
-    doc.setTextColor(100)
-    doc.text(`Saldo: R$ ${(receitas - despesas).toFixed(2)}   Receitas: R$ ${receitas.toFixed(2)}   Despesas: R$ ${despesas.toFixed(2)}`, 14, 30)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(180, 180, 210)
+    doc.text(`Relatorio Financeiro — ${mesLabel}`, 14, 26)
+    doc.setFontSize(9)
+    doc.setTextColor(140, 140, 170)
+    doc.text(`Gerado em ${dataGeracao}`, 14, 34)
 
+    // Resumo geral
+    let y = 50
+    doc.setFontSize(13)
+    doc.setTextColor(40, 40, 40)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Resumo do Mes', 14, y)
+
+    y += 6
+    autoTable(doc, {
+      startY: y,
+      head: [['Item', 'Valor']],
+      body: [
+        ['Receitas', `R$ ${receitas.toFixed(2)}`],
+        ['Despesas', `R$ ${despesas.toFixed(2)}`],
+        ['Contas a Pagar (pendente)', `R$ ${aPagar.toFixed(2)}`],
+        ['Total Salarios dos Socios', `R$ ${totalSalarios.toFixed(2)}`],
+        ['Total Vales dos Socios', `R$ ${totalVales.toFixed(2)}`],
+        ['Saldo do Mes', `R$ ${saldo.toFixed(2)}`],
+      ],
+      styles: { fontSize: 10 },
+      headStyles: { fillColor: [99, 102, 241] },
+      bodyStyles: { textColor: [40, 40, 40] },
+      alternateRowStyles: { fillColor: [245, 245, 255] },
+      columnStyles: {
+        0: { fontStyle: 'normal' },
+        1: { halign: 'right', fontStyle: 'bold' }
+      },
+      didParseCell: (data) => {
+        if (data.row.index === 5 && data.column.index === 1) {
+          data.cell.styles.textColor = saldo >= 0 ? [16, 185, 129] : [239, 68, 68]
+        }
+      }
+    })
+
+    // Receitas
     if (dadosExport.receitas.length > 0) {
+      y = (doc as any).lastAutoTable.finalY + 12
       doc.setFontSize(13)
-      doc.setTextColor(40)
-      doc.text('Receitas', 14, 44)
-      autoTable(doc, {
-        startY: 48,
-        head: [['Descricao', 'Valor', 'Data']],
-        body: dadosExport.receitas.map((x: any) => [x.descricao, `R$ ${x.valor.toFixed(2)}`, x.data]),
-        styles: { fontSize: 10 },
-        headStyles: { fillColor: [52, 211, 153] },
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(40, 40, 40)
+      doc.text('Receitas', 14, y)
+
+      const porCategoria: Record<string, number> = {}
+      dadosExport.receitas.forEach((x: any) => {
+        porCategoria[x.categoria] = (porCategoria[x.categoria] || 0) + x.valor
       })
+
+      autoTable(doc, {
+        startY: y + 4,
+        head: [['Descricao', 'Categoria', 'Valor', 'Data']],
+        body: dadosExport.receitas.map((x: any) => [x.descricao, x.categoria || '-', `R$ ${x.valor.toFixed(2)}`, x.data]),
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [16, 185, 129] },
+        alternateRowStyles: { fillColor: [240, 255, 248] },
+        columnStyles: { 2: { halign: 'right' } },
+        foot: [['', 'Total', `R$ ${receitas.toFixed(2)}`, '']],
+        footStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontStyle: 'bold' }
+      })
+
+      // Receitas por categoria
+      const cats = Object.entries(porCategoria)
+      if (cats.length > 1) {
+        y = (doc as any).lastAutoTable.finalY + 6
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(80, 80, 80)
+        doc.text('Por categoria:', 14, y)
+        autoTable(doc, {
+          startY: y + 3,
+          body: cats.map(([cat, val]) => [cat, `R$ ${val.toFixed(2)}`]),
+          styles: { fontSize: 9 },
+          columnStyles: { 1: { halign: 'right' } },
+          theme: 'plain',
+        })
+      }
     }
 
+    // Despesas
     if (dadosExport.despesas.length > 0) {
-      const y = (doc as any).lastAutoTable?.finalY + 10 || 80
+      y = (doc as any).lastAutoTable.finalY + 12
       doc.setFontSize(13)
-      doc.setTextColor(40)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(40, 40, 40)
       doc.text('Despesas', 14, y)
+
+      const porCategoria: Record<string, number> = {}
+      dadosExport.despesas.forEach((x: any) => {
+        porCategoria[x.categoria] = (porCategoria[x.categoria] || 0) + x.valor
+      })
+
       autoTable(doc, {
         startY: y + 4,
-        head: [['Descricao', 'Valor', 'Data']],
-        body: dadosExport.despesas.map((x: any) => [x.descricao, `R$ ${x.valor.toFixed(2)}`, x.data]),
-        styles: { fontSize: 10 },
-        headStyles: { fillColor: [248, 113, 113] },
+        head: [['Descricao', 'Categoria', 'Valor', 'Data', 'Status']],
+        body: dadosExport.despesas.map((x: any) => [x.descricao, x.categoria || '-', `R$ ${x.valor.toFixed(2)}`, x.data, x.status]),
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [239, 68, 68] },
+        alternateRowStyles: { fillColor: [255, 245, 245] },
+        columnStyles: { 2: { halign: 'right' } },
+        foot: [['', '', `R$ ${despesas.toFixed(2)}`, 'Total', '']],
+        footStyles: { fillColor: [239, 68, 68], textColor: [255, 255, 255], fontStyle: 'bold' }
+      })
+
+      const cats = Object.entries(porCategoria)
+      if (cats.length > 1) {
+        y = (doc as any).lastAutoTable.finalY + 6
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(80, 80, 80)
+        doc.text('Por categoria:', 14, y)
+        autoTable(doc, {
+          startY: y + 3,
+          body: cats.map(([cat, val]) => [cat, `R$ ${val.toFixed(2)}`]),
+          styles: { fontSize: 9 },
+          columnStyles: { 1: { halign: 'right' } },
+          theme: 'plain',
+        })
+      }
+    }
+
+    // Contas a Pagar pendentes
+    if (dadosExport.contas_pagar.length > 0) {
+      y = (doc as any).lastAutoTable.finalY + 12
+      doc.setFontSize(13)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(40, 40, 40)
+      doc.text('Contas a Pagar (Pendentes)', 14, y)
+      autoTable(doc, {
+        startY: y + 4,
+        head: [['Descricao', 'Valor', 'Vencimento']],
+        body: dadosExport.contas_pagar.map((x: any) => [
+          x.descricao,
+          `R$ ${x.valor.toFixed(2)}`,
+          new Date(x.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
+        ]),
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [251, 146, 60] },
+        alternateRowStyles: { fillColor: [255, 250, 240] },
+        columnStyles: { 1: { halign: 'right' } },
+        foot: [['Total', `R$ ${aPagar.toFixed(2)}`, '']],
+        footStyles: { fillColor: [251, 146, 60], textColor: [255, 255, 255], fontStyle: 'bold' }
       })
     }
 
-    if (dadosExport.salarios.length > 0) {
-      const y = (doc as any).lastAutoTable?.finalY + 10 || 120
+    // Alertas de vencimento
+    if (alertas.length > 0) {
+      y = (doc as any).lastAutoTable.finalY + 12
       doc.setFontSize(13)
-      doc.setTextColor(40)
-      doc.text('Salario dos Socios', 14, y)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(40, 40, 40)
+      doc.text('Alertas — Vencem nos proximos 30 dias', 14, y)
       autoTable(doc, {
         startY: y + 4,
-        head: [['Socio', 'Tipo', 'Valor', 'Status']],
-        body: dadosExport.salarios.map((x: any) => [x.socio, x.tipo, `R$ ${x.valor.toFixed(2)}`, x.status]),
+        head: [['Descricao', 'Valor', 'Vencimento']],
+        body: alertas.map((x: any) => [
+          x.descricao,
+          `R$ ${x.valor.toFixed(2)}`,
+          new Date(x.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
+        ]),
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [234, 179, 8] },
+        alternateRowStyles: { fillColor: [255, 253, 235] },
+        columnStyles: { 1: { halign: 'right' } },
+      })
+    }
+
+    // Salários dos sócios
+    if (dadosExport.salarios.length > 0) {
+      y = (doc as any).lastAutoTable.finalY + 12
+      doc.setFontSize(13)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(40, 40, 40)
+      doc.text('Salarios dos Socios', 14, y)
+
+      const socios = ['Caio', 'Charles', 'Bruno']
+      const resumoSocios = socios.map(nome => {
+        const sal = dadosExport.salarios.filter((x: any) => x.socio === nome && x.tipo === 'salario').reduce((a: number, x: any) => a + x.valor, 0)
+        const vale = dadosExport.salarios.filter((x: any) => x.socio === nome && x.tipo === 'vale').reduce((a: number, x: any) => a + x.valor, 0)
+        return [nome, `R$ ${sal.toFixed(2)}`, `R$ ${vale.toFixed(2)}`, `R$ ${(sal + vale).toFixed(2)}`]
+      })
+
+      autoTable(doc, {
+        startY: y + 4,
+        head: [['Socio', 'Salario', 'Vale', 'Total']],
+        body: resumoSocios,
         styles: { fontSize: 10 },
         headStyles: { fillColor: [167, 139, 250] },
+        alternateRowStyles: { fillColor: [248, 245, 255] },
+        columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } },
+        foot: [['Total Geral', `R$ ${totalSalarios.toFixed(2)}`, `R$ ${totalVales.toFixed(2)}`, `R$ ${(totalSalarios + totalVales).toFixed(2)}`]],
+        footStyles: { fillColor: [167, 139, 250], textColor: [255, 255, 255], fontStyle: 'bold' }
+      })
+
+      // Detalhamento individual
+      y = (doc as any).lastAutoTable.finalY + 8
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(80, 80, 80)
+      doc.text('Detalhamento:', 14, y)
+      autoTable(doc, {
+        startY: y + 3,
+        head: [['Socio', 'Tipo', 'Valor', 'Status']],
+        body: dadosExport.salarios.map((x: any) => [x.socio, x.tipo, `R$ ${x.valor.toFixed(2)}`, x.status]),
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [139, 92, 246] },
+        alternateRowStyles: { fillColor: [248, 245, 255] },
+        columnStyles: { 2: { halign: 'right' } },
       })
     }
 
-    doc.save(`relatorio-${mes}.pdf`)
+    // Rodapé em todas as páginas
+    const totalPages = (doc as any).internal.getNumberOfPages()
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i)
+      doc.setFontSize(8)
+      doc.setTextColor(160, 160, 160)
+      doc.text(`Aorus Tale — ${mesLabel} — Pagina ${i} de ${totalPages}`, 14, doc.internal.pageSize.getHeight() - 8)
+      doc.text(`Gerado em ${dataGeracao}`, pageWidth - 14, doc.internal.pageSize.getHeight() - 8, { align: 'right' })
+    }
+
+    doc.save(`aorus-tale-relatorio-${mes}.pdf`)
   }
 
   const saldo = receitas - despesas
