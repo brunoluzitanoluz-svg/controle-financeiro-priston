@@ -1,3 +1,4 @@
+// app/receitas/page.tsx
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -90,10 +91,10 @@ export default function Receitas() {
         <div className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6 mb-6">
           <h2 className="text-white font-semibold mb-4">Nova Receita</h2>
           <div className="grid grid-cols-2 gap-3">
-            <input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição" className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 col-span-2" />
-            <input value={valor} onChange={e => setValor(e.target.value)} placeholder="Valor" type="number" className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500" />
-            <input value={categoria} onChange={e => setCategoria(e.target.value)} placeholder="Categoria" className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500" />
-            <input value={data} onChange={e => setData(e.target.value)} type="date" className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
+            <input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 col-span-2" />
+            <input value={valor} onChange={e => setValor(e.target.value)} placeholder="Valor" type="number" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500" />
+            <input value={categoria} onChange={e => setCategoria(e.target.value)} placeholder="Categoria" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
+            <input value={data} onChange={e => setData(e.target.value)} type="date" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
             <button onClick={adicionar} className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl px-4 py-3 flex items-center justify-center gap-2 font-semibold transition-colors">
               <Plus className="w-4 h-4" /> Adicionar
             </button>

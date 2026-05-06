@@ -1,3 +1,4 @@
+// app/contas-pagar/page.tsx
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -11,6 +12,7 @@ type ContaPagar = {
   valor: number
   vencimento: string
   status: string
+  data_pagamento?: string | null // Adicionado o campo data_pagamento
 }
 
 export default function ContasPagar() {
@@ -29,7 +31,14 @@ export default function ContasPagar() {
 
   async function adicionar() {
     if (!descricao || !valor || !vencimento) return
-    await supabase.from('contas_pagar').insert({ descricao, valor: parseFloat(valor), vencimento, status })
+    const newConta: Omit<ContaPagar, 'id'> = {
+      descricao,
+      valor: parseFloat(valor),
+      vencimento,
+      status,
+      data_pagamento: status === 'pago' ? new Date().toISOString().split('T')[0] : null // Preenche se já for pago
+    }
+    await supabase.from('contas_pagar').insert(newConta)
     setDescricao(''); setValor(''); setVencimento(''); setStatus('pendente')
     carregar()
   }
@@ -40,18 +49,35 @@ export default function ContasPagar() {
   }
 
   async function alterarStatus(id: string, novoStatus: string) {
-    await supabase.from('contas_pagar').update({ status: novoStatus }).eq('id', id)
+    const updateData: { status: string; data_pagamento?: string | null } = { status: novoStatus };
+    if (novoStatus === 'pago') {
+      updateData.data_pagamento = new Date().toISOString().split('T')[0]; // Define a data de pagamento como hoje
+    } else {
+      updateData.data_pagamento = null; // Limpa a data de pagamento se voltar para pendente
+    }
+    await supabase.from('contas_pagar').update(updateData).eq('id', id)
     carregar()
   }
 
   async function salvarEdicao() {
     if (!editando) return
-    await supabase.from('contas_pagar').update({
+    const updateData: { descricao: string; valor: number; vencimento: string; status: string; data_pagamento?: string | null } = {
       descricao: editando.descricao,
       valor: editando.valor,
       vencimento: editando.vencimento,
       status: editando.status
-    }).eq('id', editando.id)
+    };
+    // Se mudou para pago e não tem data de pagamento, preenche com hoje
+    if (editando.status === 'pago' && !editando.data_pagamento) {
+      updateData.data_pagamento = new Date().toISOString().split('T')[0];
+    } else if (editando.status === 'pendente') { // Se voltou para pendente, limpa a data de pagamento
+      updateData.data_pagamento = null;
+    } else if (editando.status === 'pago' && editando.data_pagamento) {
+      // Se já estava pago e tinha data, mantém a data existente
+      updateData.data_pagamento = editando.data_pagamento;
+    }
+
+    await supabase.from('contas_pagar').update(updateData).eq('id', editando.id)
     setEditando(null)
     carregar()
   }
@@ -187,6 +213,9 @@ export default function ContasPagar() {
                     {venceEm30 && !vencido && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 font-medium">Vence em breve</span>}
                   </div>
                   <p className="text-gray-500 text-xs mt-0.5">Vence em {dataVenc.toLocaleDateString('pt-BR')}</p>
+                  {c.status === 'pago' && c.data_pagamento && (
+                    <p className="text-gray-500 text-xs mt-0.5">Pago em {new Date(c.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-4">
                   <button onClick={() => alterarStatus(c.id, c.status === 'pendente' ? 'pago' : 'pendente')} className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${c.status === 'pago' ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'}`}>

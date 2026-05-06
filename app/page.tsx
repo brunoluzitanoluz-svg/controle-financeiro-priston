@@ -1,10 +1,11 @@
+// app/page.tsx
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 import { fmt } from './lib/format'
 import Link from 'next/link'
-import { TrendingUp, TrendingDown, AlertCircle, Users, Bell, Download } from 'lucide-react'
-import jsPDF from 'jspdf'
+import { TrendingUp, TrendingDown, AlertCircle, Users, Bell, Download, CheckCircle2 } from 'lucide-react'
+import jsPDF from 'jspdf' // Certifique-se de que jsPDF e jspdf-autotable estão instalados
 import autoTable from 'jspdf-autotable'
 
 type Alerta = {
@@ -22,8 +23,9 @@ export default function Home() {
   const [mes, setMes] = useState(mesAtual)
   const [receitas, setReceitas] = useState(0)
   const [despesas, setDespesas] = useState(0)
-  const [aPagar, setAPagar] = useState(0)
-  const [aPagar30, setAPagar30] = useState(0)
+  const [aPagar, setAPagar] = useState(0) // Total de contas a pagar (pendente geral)
+  const [aPagarPago, setAPagarPago] = useState(0) // Total de contas a pagar (pagas)
+  const [aPagar30, setAPagar30] = useState(0) // Total de contas a pagar nos próximos 30 dias (apenas pendentes)
   const [salariosCaio, setSalariosCaio] = useState(0)
   const [salariosCharles, setSalariosCharles] = useState(0)
   const [salariosBruno, setSalariosBruno] = useState(0)
@@ -38,29 +40,56 @@ export default function Home() {
       const inicio = `${mes}-01`
       const fim = `${mes}-31`
 
+      // 1. Carrega Receitas
       const { data: r } = await supabase.from('receitas').select('*').gte('data', inicio).lte('data', fim)
       if (r) { setReceitas(r.reduce((acc, x) => acc + x.valor, 0)); setDadosExport((p: any) => ({ ...p, receitas: r })) }
 
+      // 2. Carrega Despesas Normais
       const { data: d } = await supabase.from('despesas').select('*').gte('data', inicio).lte('data', fim)
-      if (d) { setDespesas(d.reduce((acc, x) => acc + x.valor, 0)); setDadosExport((p: any) => ({ ...p, despesas: d })) }
-
-      const { data: cpTudo } = await supabase.from('contas_pagar').select('*').eq('status', 'pendente')
-      if (cpTudo) {
-        setAPagar(cpTudo.reduce((acc, x) => acc + x.valor, 0))
-        setDadosExport((p: any) => ({ ...p, contas_pagar: cpTudo }))
+      let totalDespesasNormais = 0
+      if (d) {
+        totalDespesasNormais = d.reduce((acc, x) => acc + x.valor, 0)
+        setDadosExport((p: any) => ({ ...p, despesas: d }))
       }
 
+      // 3. Carrega Contas a Pagar que foram PAGAS no mês atual
+      // (Isso depende da coluna 'data_pagamento' no Supabase)
+      const { data: cpPagosNoMes } = await supabase.from('contas_pagar').select('*').eq('status', 'pago').gte('data_pagamento', inicio).lte('data_pagamento', fim)
+      let totalContasPagasNoMes = 0
+      if (cpPagosNoMes) {
+        totalContasPagasNoMes = cpPagosNoMes.reduce((acc, x) => acc + x.valor, 0)
+      }
+
+      // 4. Atualiza o estado de DESPESAS somando as despesas normais e as contas a pagar pagas no mês
+      setDespesas(totalDespesasNormais + totalContasPagasNoMes)
+
+
+      // 5. Total de Contas a Pagar PENDENTES (geral, sem filtro de data)
+      const { data: cpPendentesGeral } = await supabase.from('contas_pagar').select('*').eq('status', 'pendente')
+      if (cpPendentesGeral) {
+        setAPagar(cpPendentesGeral.reduce((acc, x) => acc + x.valor, 0))
+        setDadosExport((p: any) => ({ ...p, contas_pagar: cpPendentesGeral })) // Para o PDF
+      }
+
+      // 6. Total de Contas a Pagar PAGAS (geral, sem filtro de data)
+      const { data: cpPagosGeral } = await supabase.from('contas_pagar').select('*').eq('status', 'pago')
+      if (cpPagosGeral) {
+        setAPagarPago(cpPagosGeral.reduce((acc, x) => acc + x.valor, 0))
+      }
+
+      // 7. Contas a Pagar PENDENTES que vencem nos próximos 30 dias
       const daqui30 = new Date()
       daqui30.setDate(daqui30.getDate() + 30)
       const daqui30str = daqui30.toISOString().split('T')[0]
       const hojestr = hoje.toISOString().split('T')[0]
 
-      const { data: cp30 } = await supabase.from('contas_pagar').select('*').eq('status', 'pendente').gte('vencimento', hojestr).lte('vencimento', daqui30str)
+      const { data: cp30 } = await supabase.from('contas_pagar').select('id, descricao, valor, vencimento').eq('status', 'pendente').gte('vencimento', hojestr).lte('vencimento', daqui30str)
       if (cp30) {
         setAPagar30(cp30.reduce((acc, x) => acc + x.valor, 0))
         setAlertas(cp30.map(x => ({ ...x, tipo: 'pagar' })))
       }
 
+      // 8. Salários dos Sócios
       const { data: s } = await supabase.from('salarios_socios').select('*').eq('mes', mes)
       if (s) {
         setSalariosCaio(s.filter(x => x.socio === 'Caio' && x.tipo === 'salario').reduce((acc, x) => acc + x.valor, 0))
@@ -75,11 +104,12 @@ export default function Home() {
     carregar()
   }, [mes])
 
+  // --- Funções para Exportar PDF ---
   function exportarPDF() {
     const doc = new jsPDF()
     const mesLabel = new Date(mes + '-01').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })
     const dataGeracao = hoje.toLocaleDateString('pt-BR')
-    const saldo = receitas - despesas
+    const saldo = receitas - despesas // Saldo já reflete as despesas atualizadas
     const totalSalarios = [salariosCaio, salariosCharles, salariosBruno].reduce((a, b) => a + b, 0)
     const totalVales = [valesCaio, valesCharles, valesBruno].reduce((a, b) => a + b, 0)
     const pageWidth = doc.internal.pageSize.getWidth()
@@ -112,8 +142,9 @@ export default function Home() {
       head: [['Item', 'Valor']],
       body: [
         ['Receitas', pdfFmt(receitas)],
-        ['Despesas', pdfFmt(despesas)],
+        ['Despesas', pdfFmt(despesas)], // Despesas já inclui as contas a pagar pagas no mês
         ['Total A Pagar (pendente geral)', pdfFmt(aPagar)],
+        ['Total A Pagar (pago geral)', pdfFmt(aPagarPago)],
         ['A Pagar nos proximos 30 dias', pdfFmt(aPagar30)],
         ['Total Salarios dos Socios', pdfFmt(totalSalarios)],
         ['Total Vales dos Socios', pdfFmt(totalVales)],
@@ -125,7 +156,7 @@ export default function Home() {
       alternateRowStyles: { fillColor: [245, 245, 255] },
       columnStyles: { 0: { fontStyle: 'normal' }, 1: { halign: 'right', fontStyle: 'bold' } },
       didParseCell: (data) => {
-        if (data.row.index === 6 && data.column.index === 1) {
+        if (data.row.index === 7 && data.column.index === 1) {
           data.cell.styles.textColor = saldo >= 0 ? [16, 185, 129] : [239, 68, 68]
         }
       }
@@ -172,7 +203,7 @@ export default function Home() {
       doc.setFontSize(13)
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(40, 40, 40)
-      doc.text('Despesas', 14, y)
+      doc.text('Despesas (Incluindo Contas a Pagar Pagas no Mes)', 14, y) // Título ajustado
       const porCategoria: Record<string, number> = {}
       dadosExport.despesas.forEach((x: any) => { porCategoria[x.categoria] = (porCategoria[x.categoria] || 0) + x.valor })
       autoTable(doc, {
@@ -203,6 +234,7 @@ export default function Home() {
       }
     }
 
+    // Tabela de Contas a Pagar (Todas Pendentes)
     if (dadosExport.contas_pagar.length > 0) {
       y = (doc as any).lastAutoTable.finalY + 12
       doc.setFontSize(13)
@@ -226,86 +258,126 @@ export default function Home() {
       })
     }
 
-    if (alertas.length > 0) {
-      y = (doc as any).lastAutoTable.finalY + 12
-      doc.setFontSize(13)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(40, 40, 40)
-      doc.text('Alertas — Vencem nos proximos 30 dias', 14, y)
-      autoTable(doc, {
-        startY: y + 4,
-        head: [['Descricao', 'Valor', 'Vencimento']],
-        body: alertas.map((x: any) => [
-          x.descricao,
-          pdfFmt(x.valor),
-          new Date(x.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
-        ]),
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [234, 179, 8] },
-        alternateRowStyles: { fillColor: [255, 253, 235] },
-        columnStyles: { 1: { halign: 'right' } },
-        foot: [['Total 30 dias', pdfFmt(aPagar30), '']],
-        footStyles: { fillColor: [234, 179, 8], textColor: [255, 255, 255], fontStyle: 'bold' }
-      })
+    // Tabela de Contas a Pagar (Pagas no Mes)
+    // Esta busca é síncrona aqui, o que não é ideal em um componente React,
+    // mas para o PDF é aceitável pois é uma função única.
+    // Idealmente, essa busca seria feita no useEffect e o resultado armazenado em estado.
+    async function getCpPagosNoMesParaPDF() {
+      const { data } = await supabase.from('contas_pagar').select('*').eq('status', 'pago').gte('data_pagamento', mes + '-01').lte('data_pagamento', mes + '-31');
+      return data;
     }
 
-    if (dadosExport.salarios.length > 0) {
-      y = (doc as any).lastAutoTable.finalY + 12
-      doc.setFontSize(13)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(40, 40, 40)
-      doc.text('Salarios dos Socios', 14, y)
-      const socios = ['Caio', 'Charles', 'Bruno']
-      const resumoSocios = socios.map(nome => {
-        const sal = dadosExport.salarios.filter((x: any) => x.socio === nome && x.tipo === 'salario').reduce((a: number, x: any) => a + x.valor, 0)
-        const vale = dadosExport.salarios.filter((x: any) => x.socio === nome && x.tipo === 'vale').reduce((a: number, x: any) => a + x.valor, 0)
-        return [nome, pdfFmt(sal), pdfFmt(vale), pdfFmt(sal + vale)]
-      })
-      autoTable(doc, {
-        startY: y + 4,
-        head: [['Socio', 'Salario', 'Vale', 'Total']],
-        body: resumoSocios,
-        styles: { fontSize: 10 },
-        headStyles: { fillColor: [167, 139, 250] },
-        alternateRowStyles: { fillColor: [248, 245, 255] },
-        columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } },
-        foot: [['Total Geral', pdfFmt(totalSalarios), pdfFmt(totalVales), pdfFmt(totalSalarios + totalVales)]],
-        footStyles: { fillColor: [167, 139, 250], textColor: [255, 255, 255], fontStyle: 'bold' }
-      })
-      y = (doc as any).lastAutoTable.finalY + 8
-      doc.setFontSize(10)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(80, 80, 80)
-      doc.text('Detalhamento:', 14, y)
-      autoTable(doc, {
-        startY: y + 3,
-        head: [['Socio', 'Tipo', 'Valor', 'Status']],
-        body: dadosExport.salarios.map((x: any) => [x.socio, x.tipo, pdfFmt(x.valor), x.status]),
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [139, 92, 246] },
-        alternateRowStyles: { fillColor: [248, 245, 255] },
-        columnStyles: { 2: { halign: 'right' } },
-      })
-    }
+    getCpPagosNoMesParaPDF().then(cpPagosNoMesParaPDF => {
+      if (cpPagosNoMesParaPDF && cpPagosNoMesParaPDF.length > 0) {
+        y = (doc as any).lastAutoTable.finalY + 12
+        doc.setFontSize(13)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(40, 40, 40)
+        doc.text('Contas a Pagar (Pagas no Mes)', 14, y)
+        autoTable(doc, {
+          startY: y + 4,
+          head: [['Descricao', 'Valor', 'Vencimento', 'Data Pagamento']],
+          body: cpPagosNoMesParaPDF.map((x: any) => [
+            x.descricao,
+            pdfFmt(x.valor),
+            new Date(x.vencimento + 'T00:00:00').toLocaleDateString('pt-BR'),
+            new Date(x.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')
+          ]),
+          styles: { fontSize: 9 },
+          headStyles: { fillColor: [16, 185, 129] },
+          alternateRowStyles: { fillColor: [240, 255, 248] },
+          columnStyles: { 1: { halign: 'right' } },
+          foot: [['Total', pdfFmt(cpPagosNoMesParaPDF.reduce((acc, x) => acc + x.valor, 0)), '', '']],
+          footStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontStyle: 'bold' }
+        })
+      }
 
-    const totalPages = (doc as any).internal.getNumberOfPages()
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i)
-      doc.setFontSize(8)
-      doc.setTextColor(160, 160, 160)
-      doc.text(`Aorus Tale — ${mesLabel} — Pagina ${i} de ${totalPages}`, 14, doc.internal.pageSize.getHeight() - 8)
-      doc.text(`Gerado em ${dataGeracao}`, pageWidth - 14, doc.internal.pageSize.getHeight() - 8, { align: 'right' })
-    }
+      // O restante do PDF (alertas, salarios, rodapé) precisa ser chamado aqui dentro
+      // para garantir que a tabela de contas pagas no mês seja renderizada antes.
+      // Isso é uma limitação de como o jsPDF-autotable funciona com chamadas assíncronas.
 
-    doc.save(`aorus-tale-relatorio-${mes}.pdf`)
+      if (alertas.length > 0) {
+        y = (doc as any).lastAutoTable.finalY + 12
+        doc.setFontSize(13)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(40, 40, 40)
+        doc.text('Alertas — Vencem nos proximos 30 dias', 14, y)
+        autoTable(doc, {
+          startY: y + 4,
+          head: [['Descricao', 'Valor', 'Vencimento']],
+          body: alertas.map((x: any) => [
+            x.descricao,
+            pdfFmt(x.valor),
+            new Date(x.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
+          ]),
+          styles: { fontSize: 9 },
+          headStyles: { fillColor: [234, 179, 8] },
+          alternateRowStyles: { fillColor: [255, 253, 235] },
+          columnStyles: { 1: { halign: 'right' } },
+          foot: [['Total 30 dias', pdfFmt(aPagar30), '']],
+          footStyles: { fillColor: [234, 179, 8], textColor: [255, 255, 255], fontStyle: 'bold' }
+        })
+      }
+
+      if (dadosExport.salarios.length > 0) {
+        y = (doc as any).lastAutoTable.finalY + 12
+        doc.setFontSize(13)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(40, 40, 40)
+        doc.text('Salarios dos Socios', 14, y)
+        const socios = ['Caio', 'Charles', 'Bruno']
+        const resumoSocios = socios.map(nome => {
+          const sal = dadosExport.salarios.filter((x: any) => x.socio === nome && x.tipo === 'salario').reduce((a: number, x: any) => a + x.valor, 0)
+          const vale = dadosExport.salarios.filter((x: any) => x.socio === nome && x.tipo === 'vale').reduce((a: number, x: any) => a + x.valor, 0)
+          return [nome, pdfFmt(sal), pdfFmt(vale), pdfFmt(sal + vale)]
+        })
+        autoTable(doc, {
+          startY: y + 4,
+          head: [['Socio', 'Salario', 'Vale', 'Total']],
+          body: resumoSocios,
+          styles: { fontSize: 10 },
+          headStyles: { fillColor: [167, 139, 250] },
+          alternateRowStyles: { fillColor: [248, 245, 255] },
+          columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } },
+          foot: [['Total Geral', pdfFmt(totalSalarios), pdfFmt(totalVales), pdfFmt(totalSalarios + totalVales)]],
+          footStyles: { fillColor: [167, 139, 250], textColor: [255, 255, 255], fontStyle: 'bold' }
+        })
+        y = (doc as any).lastAutoTable.finalY + 8
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(80, 80, 80)
+        doc.text('Detalhamento:', 14, y)
+        autoTable(doc, {
+          startY: y + 3,
+          head: [['Socio', 'Tipo', 'Valor', 'Status']],
+          body: dadosExport.salarios.map((x: any) => [x.socio, x.tipo, pdfFmt(x.valor), x.status]),
+          styles: { fontSize: 9 },
+          headStyles: { fillColor: [139, 92, 246] },
+          alternateRowStyles: { fillColor: [248, 245, 255] },
+          columnStyles: { 2: { halign: 'right' } },
+        })
+      }
+
+      const totalPages = (doc as any).internal.getNumberOfPages()
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i)
+        doc.setFontSize(8)
+        doc.setTextColor(160, 160, 160)
+        doc.text(`Aorus Tale — ${mesLabel} — Pagina ${i} de ${totalPages}`, 14, doc.internal.pageSize.getHeight() - 8)
+        doc.text(`Gerado em ${dataGeracao}`, pageWidth - 14, doc.internal.pageSize.getHeight() - 8, { align: 'right' })
+      }
+
+      doc.save(`aorus-tale-relatorio-${mes}.pdf`)
+    });
   }
 
-  const saldo = receitas - despesas
+  const saldo = receitas - despesas // O saldo agora usa o 'despesas' atualizado
 
   const cards = [
     { titulo: 'Receitas', valor: receitas, cor: 'text-emerald-400', bg: 'bg-emerald-400/10', icon: TrendingUp, href: '/receitas' },
     { titulo: 'Despesas', valor: despesas, cor: 'text-rose-400', bg: 'bg-rose-400/10', icon: TrendingDown, href: '/despesas' },
-    { titulo: 'A Pagar', valor: aPagar, cor: 'text-orange-400', bg: 'bg-orange-400/10', icon: AlertCircle, href: '/contas-pagar' },
+    { titulo: 'A Pagar (Pendente)', valor: aPagar, cor: 'text-orange-400', bg: 'bg-orange-400/10', icon: AlertCircle, href: '/contas-pagar' },
+    { titulo: 'A Pagar (Pago)', valor: aPagarPago, cor: 'text-emerald-400', bg: 'bg-emerald-400/10', icon: CheckCircle2, href: '/contas-pagar' },
   ]
 
   const socios = [
@@ -364,7 +436,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-4 gap-4 mb-4">
           {cards.map(card => {
             const Icon = card.icon
             return (

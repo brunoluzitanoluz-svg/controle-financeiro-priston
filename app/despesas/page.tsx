@@ -1,3 +1,4 @@
+// app/despesas/page.tsx
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -105,7 +106,7 @@ export default function Despesas() {
               <option value="pago">Pago</option>
               <option value="pendente">Pendente</option>
             </select>
-            <button onClick={adicionar} className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl px-4 py-3 flex items-center justify-center gap-2 font-semibold transition-colors col-span-2">
+            <button onClick={adicionar} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl px-4 py-3 flex items-center justify-center gap-2 font-semibold transition-colors col-span-2">
               <Plus className="w-4 h-4" /> Adicionar
             </button>
           </div>
