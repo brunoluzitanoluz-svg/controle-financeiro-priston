@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
+import { fmt } from './lib/format'
 import Link from 'next/link'
 import { TrendingUp, TrendingDown, AlertCircle, Users, Bell, Download } from 'lucide-react'
 import jsPDF from 'jspdf'
@@ -43,14 +44,12 @@ export default function Home() {
       const { data: d } = await supabase.from('despesas').select('*').gte('data', inicio).lte('data', fim)
       if (d) { setDespesas(d.reduce((acc, x) => acc + x.valor, 0)); setDadosExport((p: any) => ({ ...p, despesas: d })) }
 
-      // Total de TUDO que está pendente, sem filtro de data
       const { data: cpTudo } = await supabase.from('contas_pagar').select('*').eq('status', 'pendente')
       if (cpTudo) {
         setAPagar(cpTudo.reduce((acc, x) => acc + x.valor, 0))
         setDadosExport((p: any) => ({ ...p, contas_pagar: cpTudo }))
       }
 
-      // Só o que vence nos próximos 30 dias
       const daqui30 = new Date()
       daqui30.setDate(daqui30.getDate() + 30)
       const daqui30str = daqui30.toISOString().split('T')[0]
@@ -85,6 +84,8 @@ export default function Home() {
     const totalVales = [valesCaio, valesCharles, valesBruno].reduce((a, b) => a + b, 0)
     const pageWidth = doc.internal.pageSize.getWidth()
 
+    const pdfFmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
     doc.setFillColor(20, 20, 40)
     doc.rect(0, 0, pageWidth, 38, 'F')
     doc.setFontSize(20)
@@ -110,13 +111,13 @@ export default function Home() {
       startY: y,
       head: [['Item', 'Valor']],
       body: [
-        ['Receitas', `R$ ${receitas.toFixed(2)}`],
-        ['Despesas', `R$ ${despesas.toFixed(2)}`],
-        ['Total A Pagar (pendente geral)', `R$ ${aPagar.toFixed(2)}`],
-        ['A Pagar nos proximos 30 dias', `R$ ${aPagar30.toFixed(2)}`],
-        ['Total Salarios dos Socios', `R$ ${totalSalarios.toFixed(2)}`],
-        ['Total Vales dos Socios', `R$ ${totalVales.toFixed(2)}`],
-        ['Saldo do Mes', `R$ ${saldo.toFixed(2)}`],
+        ['Receitas', pdfFmt(receitas)],
+        ['Despesas', pdfFmt(despesas)],
+        ['Total A Pagar (pendente geral)', pdfFmt(aPagar)],
+        ['A Pagar nos proximos 30 dias', pdfFmt(aPagar30)],
+        ['Total Salarios dos Socios', pdfFmt(totalSalarios)],
+        ['Total Vales dos Socios', pdfFmt(totalVales)],
+        ['Saldo do Mes', pdfFmt(saldo)],
       ],
       styles: { fontSize: 10 },
       headStyles: { fillColor: [99, 102, 241] },
@@ -141,12 +142,12 @@ export default function Home() {
       autoTable(doc, {
         startY: y + 4,
         head: [['Descricao', 'Categoria', 'Valor', 'Data']],
-        body: dadosExport.receitas.map((x: any) => [x.descricao, x.categoria || '-', `R$ ${x.valor.toFixed(2)}`, x.data]),
+        body: dadosExport.receitas.map((x: any) => [x.descricao, x.categoria || '-', pdfFmt(x.valor), x.data]),
         styles: { fontSize: 9 },
         headStyles: { fillColor: [16, 185, 129] },
         alternateRowStyles: { fillColor: [240, 255, 248] },
         columnStyles: { 2: { halign: 'right' } },
-        foot: [['', 'Total', `R$ ${receitas.toFixed(2)}`, '']],
+        foot: [['', 'Total', pdfFmt(receitas), '']],
         footStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontStyle: 'bold' }
       })
       const cats = Object.entries(porCategoria)
@@ -158,7 +159,7 @@ export default function Home() {
         doc.text('Por categoria:', 14, y)
         autoTable(doc, {
           startY: y + 3,
-          body: cats.map(([cat, val]) => [cat, `R$ ${val.toFixed(2)}`]),
+          body: cats.map(([cat, val]) => [cat, pdfFmt(val)]),
           styles: { fontSize: 9 },
           columnStyles: { 1: { halign: 'right' } },
           theme: 'plain',
@@ -177,12 +178,12 @@ export default function Home() {
       autoTable(doc, {
         startY: y + 4,
         head: [['Descricao', 'Categoria', 'Valor', 'Data', 'Status']],
-        body: dadosExport.despesas.map((x: any) => [x.descricao, x.categoria || '-', `R$ ${x.valor.toFixed(2)}`, x.data, x.status]),
+        body: dadosExport.despesas.map((x: any) => [x.descricao, x.categoria || '-', pdfFmt(x.valor), x.data, x.status]),
         styles: { fontSize: 9 },
         headStyles: { fillColor: [239, 68, 68] },
         alternateRowStyles: { fillColor: [255, 245, 245] },
         columnStyles: { 2: { halign: 'right' } },
-        foot: [['', '', `R$ ${despesas.toFixed(2)}`, 'Total', '']],
+        foot: [['', '', pdfFmt(despesas), 'Total', '']],
         footStyles: { fillColor: [239, 68, 68], textColor: [255, 255, 255], fontStyle: 'bold' }
       })
       const cats = Object.entries(porCategoria)
@@ -194,7 +195,7 @@ export default function Home() {
         doc.text('Por categoria:', 14, y)
         autoTable(doc, {
           startY: y + 3,
-          body: cats.map(([cat, val]) => [cat, `R$ ${val.toFixed(2)}`]),
+          body: cats.map(([cat, val]) => [cat, pdfFmt(val)]),
           styles: { fontSize: 9 },
           columnStyles: { 1: { halign: 'right' } },
           theme: 'plain',
@@ -213,14 +214,14 @@ export default function Home() {
         head: [['Descricao', 'Valor', 'Vencimento']],
         body: dadosExport.contas_pagar.map((x: any) => [
           x.descricao,
-          `R$ ${x.valor.toFixed(2)}`,
+          pdfFmt(x.valor),
           new Date(x.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
         ]),
         styles: { fontSize: 9 },
         headStyles: { fillColor: [251, 146, 60] },
         alternateRowStyles: { fillColor: [255, 250, 240] },
         columnStyles: { 1: { halign: 'right' } },
-        foot: [['Total', `R$ ${aPagar.toFixed(2)}`, '']],
+        foot: [['Total', pdfFmt(aPagar), '']],
         footStyles: { fillColor: [251, 146, 60], textColor: [255, 255, 255], fontStyle: 'bold' }
       })
     }
@@ -236,14 +237,14 @@ export default function Home() {
         head: [['Descricao', 'Valor', 'Vencimento']],
         body: alertas.map((x: any) => [
           x.descricao,
-          `R$ ${x.valor.toFixed(2)}`,
+          pdfFmt(x.valor),
           new Date(x.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')
         ]),
         styles: { fontSize: 9 },
         headStyles: { fillColor: [234, 179, 8] },
         alternateRowStyles: { fillColor: [255, 253, 235] },
         columnStyles: { 1: { halign: 'right' } },
-        foot: [['Total 30 dias', `R$ ${aPagar30.toFixed(2)}`, '']],
+        foot: [['Total 30 dias', pdfFmt(aPagar30), '']],
         footStyles: { fillColor: [234, 179, 8], textColor: [255, 255, 255], fontStyle: 'bold' }
       })
     }
@@ -258,7 +259,7 @@ export default function Home() {
       const resumoSocios = socios.map(nome => {
         const sal = dadosExport.salarios.filter((x: any) => x.socio === nome && x.tipo === 'salario').reduce((a: number, x: any) => a + x.valor, 0)
         const vale = dadosExport.salarios.filter((x: any) => x.socio === nome && x.tipo === 'vale').reduce((a: number, x: any) => a + x.valor, 0)
-        return [nome, `R$ ${sal.toFixed(2)}`, `R$ ${vale.toFixed(2)}`, `R$ ${(sal + vale).toFixed(2)}`]
+        return [nome, pdfFmt(sal), pdfFmt(vale), pdfFmt(sal + vale)]
       })
       autoTable(doc, {
         startY: y + 4,
@@ -268,7 +269,7 @@ export default function Home() {
         headStyles: { fillColor: [167, 139, 250] },
         alternateRowStyles: { fillColor: [248, 245, 255] },
         columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } },
-        foot: [['Total Geral', `R$ ${totalSalarios.toFixed(2)}`, `R$ ${totalVales.toFixed(2)}`, `R$ ${(totalSalarios + totalVales).toFixed(2)}`]],
+        foot: [['Total Geral', pdfFmt(totalSalarios), pdfFmt(totalVales), pdfFmt(totalSalarios + totalVales)]],
         footStyles: { fillColor: [167, 139, 250], textColor: [255, 255, 255], fontStyle: 'bold' }
       })
       y = (doc as any).lastAutoTable.finalY + 8
@@ -279,7 +280,7 @@ export default function Home() {
       autoTable(doc, {
         startY: y + 3,
         head: [['Socio', 'Tipo', 'Valor', 'Status']],
-        body: dadosExport.salarios.map((x: any) => [x.socio, x.tipo, `R$ ${x.valor.toFixed(2)}`, x.status]),
+        body: dadosExport.salarios.map((x: any) => [x.socio, x.tipo, pdfFmt(x.valor), x.status]),
         styles: { fontSize: 9 },
         headStyles: { fillColor: [139, 92, 246] },
         alternateRowStyles: { fillColor: [248, 245, 255] },
@@ -337,7 +338,7 @@ export default function Home() {
                 <Bell className="w-4 h-4 text-yellow-400" />
                 <p className="text-yellow-400 font-semibold text-sm">Vencem nos proximos 30 dias</p>
               </div>
-              <span className="text-yellow-400 font-bold text-sm">R$ {aPagar30.toFixed(2)}</span>
+              <span className="text-yellow-400 font-bold text-sm">{fmt(aPagar30)}</span>
             </div>
             <div className="space-y-2">
               {alertas.map(a => (
@@ -347,7 +348,7 @@ export default function Home() {
                     <p className="text-white text-sm">{a.descricao}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-white font-semibold text-sm">R$ {a.valor.toFixed(2)}</p>
+                    <p className="text-white font-semibold text-sm">{fmt(a.valor)}</p>
                     <p className="text-gray-500 text-xs">{new Date(a.vencimento + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
                   </div>
                 </div>
@@ -359,7 +360,7 @@ export default function Home() {
         <div className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6 mb-8">
           <p className="text-gray-400 text-sm mb-1">Saldo do mes</p>
           <p className={`text-4xl font-bold ${saldo >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-            R$ {saldo.toFixed(2)}
+            {fmt(saldo)}
           </p>
         </div>
 
@@ -372,13 +373,12 @@ export default function Home() {
                   <Icon className={`w-5 h-5 ${card.cor}`} />
                 </div>
                 <p className="text-gray-400 text-sm">{card.titulo}</p>
-                <p className={`text-2xl font-bold mt-1 ${card.cor}`}>R$ {card.valor.toFixed(2)}</p>
+                <p className={`text-2xl font-bold mt-1 ${card.cor}`}>{fmt(card.valor)}</p>
               </Link>
             )
           })}
         </div>
 
-        {/* Card separado para vencimento 30 dias */}
         <div className="bg-[#1a1d2e] border border-yellow-400/20 rounded-2xl p-5 mb-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-yellow-400/10 rounded-xl flex items-center justify-center">
@@ -386,7 +386,7 @@ export default function Home() {
             </div>
             <div>
               <p className="text-gray-400 text-sm">A Pagar nos proximos 30 dias</p>
-              <p className="text-yellow-400 text-2xl font-bold mt-0.5">R$ {aPagar30.toFixed(2)}</p>
+              <p className="text-yellow-400 text-2xl font-bold mt-0.5">{fmt(aPagar30)}</p>
             </div>
           </div>
           <Link href="/contas-pagar" className="text-indigo-400 text-sm hover:text-indigo-300 transition-colors">Ver tudo</Link>
@@ -406,12 +406,12 @@ export default function Home() {
             {socios.map(s => (
               <div key={s.nome} className="bg-[#0f1117] rounded-xl p-4">
                 <p className="text-gray-400 text-sm mb-2">{s.nome}</p>
-                <p className="text-purple-400 text-lg font-bold">R$ {s.salario.toFixed(2)}</p>
+                <p className="text-purple-400 text-lg font-bold">{fmt(s.salario)}</p>
                 <p className="text-xs text-gray-500 mt-0.5">Salario</p>
-                <p className="text-orange-400 text-lg font-bold mt-2">R$ {s.vale.toFixed(2)}</p>
+                <p className="text-orange-400 text-lg font-bold mt-2">{fmt(s.vale)}</p>
                 <p className="text-xs text-gray-500 mt-0.5">Vale</p>
                 <div className="border-t border-[#2a2d3e] mt-2 pt-2">
-                  <p className="text-white text-sm font-semibold">Total: R$ {(s.salario + s.vale).toFixed(2)}</p>
+                  <p className="text-white text-sm font-semibold">Total: {fmt(s.salario + s.vale)}</p>
                 </div>
               </div>
             ))}

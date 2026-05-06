@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { fmt } from '../lib/format'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, Pencil, X, Check } from 'lucide-react'
 
@@ -65,7 +66,7 @@ export default function Despesas() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-white">Despesas</h1>
-            <p className="text-rose-400 text-sm mt-0.5">Total: R$ {total.toFixed(2)}</p>
+            <p className="text-rose-400 text-sm mt-0.5">Total: {fmt(total)}</p>
           </div>
         </div>
 
@@ -96,11 +97,11 @@ export default function Despesas() {
         <div className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6 mb-6">
           <h2 className="text-white font-semibold mb-4">Nova Despesa</h2>
           <div className="grid grid-cols-2 gap-3">
-            <input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição" className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 col-span-2" />
-            <input value={valor} onChange={e => setValor(e.target.value)} placeholder="Valor" type="number" className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500" />
-            <input value={categoria} onChange={e => setCategoria(e.target.value)} placeholder="Categoria" className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500" />
-            <input value={data} onChange={e => setData(e.target.value)} type="date" className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
-            <select value={status} onChange={e => setStatus(e.target.value)} className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+            <input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 col-span-2" />
+            <input value={valor} onChange={e => setValor(e.target.value)} placeholder="Valor" type="number" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500" />
+            <input value={categoria} onChange={e => setCategoria(e.target.value)} placeholder="Categoria" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500" />
+            <input value={data} onChange={e => setData(e.target.value)} type="date" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
+            <select value={status} onChange={e => setStatus(e.target.value)} className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
               <option value="pago">Pago</option>
               <option value="pendente">Pendente</option>
             </select>
@@ -115,13 +116,13 @@ export default function Despesas() {
             <div key={d.id} className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl px-6 py-4 flex items-center justify-between">
               <div>
                 <p className="text-white font-medium">{d.descricao}</p>
-                <p className="text-gray-500 text-xs mt-0.5">{d.categoria} · {d.data}</p>
+                <p className="text-gray-500 text-xs mt-0.5">{d.categoria} · {new Date(d.data + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
               </div>
               <div className="flex items-center gap-4">
                 <span className={`text-xs px-3 py-1 rounded-full font-medium ${d.status === 'pago' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
                   {d.status}
                 </span>
-                <span className="text-rose-400 font-semibold">R$ {d.valor.toFixed(2)}</span>
+                <span className="text-rose-400 font-semibold">{fmt(d.valor)}</span>
                 <button onClick={() => setEditando(d)} className="text-gray-600 hover:text-indigo-400 transition-colors">
                   <Pencil className="w-4 h-4" />
                 </button>

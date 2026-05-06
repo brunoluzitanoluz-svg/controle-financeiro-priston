@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { fmt } from '../lib/format'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, Pencil, X, Check } from 'lucide-react'
 
@@ -62,7 +63,7 @@ export default function Receitas() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-white">Receitas</h1>
-            <p className="text-emerald-400 text-sm mt-0.5">Total: R$ {total.toFixed(2)}</p>
+            <p className="text-emerald-400 text-sm mt-0.5">Total: {fmt(total)}</p>
           </div>
         </div>
 
@@ -104,10 +105,10 @@ export default function Receitas() {
             <div key={r.id} className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl px-6 py-4 flex items-center justify-between">
               <div>
                 <p className="text-white font-medium">{r.descricao}</p>
-                <p className="text-gray-500 text-xs mt-0.5">{r.categoria} · {r.data}</p>
+                <p className="text-gray-500 text-xs mt-0.5">{r.categoria} · {new Date(r.data + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
               </div>
               <div className="flex items-center gap-4">
-                <span className="text-emerald-400 font-semibold">R$ {r.valor.toFixed(2)}</span>
+                <span className="text-emerald-400 font-semibold">{fmt(r.valor)}</span>
                 <button onClick={() => setEditando(r)} className="text-gray-600 hover:text-indigo-400 transition-colors">
                   <Pencil className="w-4 h-4" />
                 </button>

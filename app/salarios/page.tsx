@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { fmt } from '../lib/format'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
 
@@ -63,7 +64,7 @@ export default function Salarios() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-white">Salario dos Socios</h1>
-            <p className="text-gray-500 text-sm mt-0.5">Pago: <span className="text-emerald-400">R$ {totalPago.toFixed(2)}</span> · Pendente: <span className="text-orange-400">R$ {totalPendente.toFixed(2)}</span></p>
+            <p className="text-gray-500 text-sm mt-0.5">Pago: <span className="text-emerald-400">{fmt(totalPago)}</span> · Pendente: <span className="text-orange-400">{fmt(totalPendente)}</span></p>
           </div>
         </div>
 
@@ -98,7 +99,7 @@ export default function Salarios() {
               <div key={s}>
                 <div className="flex items-center justify-between px-1 mb-2">
                   <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider">{s}</p>
-                  <p className="text-gray-400 text-xs">Total: <span className="text-white font-semibold">R$ {totalSocio.toFixed(2)}</span></p>
+                  <p className="text-gray-400 text-xs">Total: <span className="text-white font-semibold">{fmt(totalSocio)}</span></p>
                 </div>
                 {itens.map(r => (
                   <div key={r.id} className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl px-6 py-4 flex items-center justify-between mb-2">
@@ -112,7 +113,7 @@ export default function Salarios() {
                       </button>
                     </div>
                     <div className="flex items-center gap-4">
-                      <span className="text-white font-semibold">R$ {r.valor.toFixed(2)}</span>
+                      <span className="text-white font-semibold">{fmt(r.valor)}</span>
                       <button onClick={() => remover(r.id)} className="text-gray-600 hover:text-rose-400 transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>
