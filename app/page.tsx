@@ -22,6 +22,7 @@ export default function Home() {
   const [receitas, setReceitas] = useState(0)
   const [despesas, setDespesas] = useState(0)
   const [aPagar, setAPagar] = useState(0)
+  const [aPagar30, setAPagar30] = useState(0)
   const [salariosCaio, setSalariosCaio] = useState(0)
   const [salariosCharles, setSalariosCharles] = useState(0)
   const [salariosBruno, setSalariosBruno] = useState(0)
@@ -42,8 +43,24 @@ export default function Home() {
       const { data: d } = await supabase.from('despesas').select('*').gte('data', inicio).lte('data', fim)
       if (d) { setDespesas(d.reduce((acc, x) => acc + x.valor, 0)); setDadosExport((p: any) => ({ ...p, despesas: d })) }
 
-      const { data: cp } = await supabase.from('contas_pagar').select('*').eq('status', 'pendente').gte('vencimento', inicio).lte('vencimento', fim)
-      if (cp) { setAPagar(cp.reduce((acc, x) => acc + x.valor, 0)); setDadosExport((p: any) => ({ ...p, contas_pagar: cp })) }
+      // Total de TUDO que está pendente, sem filtro de data
+      const { data: cpTudo } = await supabase.from('contas_pagar').select('*').eq('status', 'pendente')
+      if (cpTudo) {
+        setAPagar(cpTudo.reduce((acc, x) => acc + x.valor, 0))
+        setDadosExport((p: any) => ({ ...p, contas_pagar: cpTudo }))
+      }
+
+      // Só o que vence nos próximos 30 dias
+      const daqui30 = new Date()
+      daqui30.setDate(daqui30.getDate() + 30)
+      const daqui30str = daqui30.toISOString().split('T')[0]
+      const hojestr = hoje.toISOString().split('T')[0]
+
+      const { data: cp30 } = await supabase.from('contas_pagar').select('*').eq('status', 'pendente').gte('vencimento', hojestr).lte('vencimento', daqui30str)
+      if (cp30) {
+        setAPagar30(cp30.reduce((acc, x) => acc + x.valor, 0))
+        setAlertas(cp30.map(x => ({ ...x, tipo: 'pagar' })))
+      }
 
       const { data: s } = await supabase.from('salarios_socios').select('*').eq('mes', mes)
       if (s) {
@@ -55,14 +72,6 @@ export default function Home() {
         setValesBruno(s.filter(x => x.socio === 'Bruno' && x.tipo === 'vale').reduce((acc, x) => acc + x.valor, 0))
         setDadosExport((p: any) => ({ ...p, salarios: s }))
       }
-
-      const daqui30 = new Date()
-      daqui30.setDate(daqui30.getDate() + 30)
-      const daqui30str = daqui30.toISOString().split('T')[0]
-      const hojestr = hoje.toISOString().split('T')[0]
-
-      const { data: alertasPagar } = await supabase.from('contas_pagar').select('id, descricao, valor, vencimento').eq('status', 'pendente').lte('vencimento', daqui30str).gte('vencimento', hojestr)
-      setAlertas((alertasPagar || []).map(x => ({ ...x, tipo: 'pagar' })))
     }
     carregar()
   }, [mes])
@@ -76,7 +85,6 @@ export default function Home() {
     const totalVales = [valesCaio, valesCharles, valesBruno].reduce((a, b) => a + b, 0)
     const pageWidth = doc.internal.pageSize.getWidth()
 
-    // Cabeçalho
     doc.setFillColor(20, 20, 40)
     doc.rect(0, 0, pageWidth, 38, 'F')
     doc.setFontSize(20)
@@ -91,7 +99,6 @@ export default function Home() {
     doc.setTextColor(140, 140, 170)
     doc.text(`Gerado em ${dataGeracao}`, 14, 34)
 
-    // Resumo geral
     let y = 50
     doc.setFontSize(13)
     doc.setTextColor(40, 40, 40)
@@ -105,7 +112,8 @@ export default function Home() {
       body: [
         ['Receitas', `R$ ${receitas.toFixed(2)}`],
         ['Despesas', `R$ ${despesas.toFixed(2)}`],
-        ['Contas a Pagar (pendente)', `R$ ${aPagar.toFixed(2)}`],
+        ['Total A Pagar (pendente geral)', `R$ ${aPagar.toFixed(2)}`],
+        ['A Pagar nos proximos 30 dias', `R$ ${aPagar30.toFixed(2)}`],
         ['Total Salarios dos Socios', `R$ ${totalSalarios.toFixed(2)}`],
         ['Total Vales dos Socios', `R$ ${totalVales.toFixed(2)}`],
         ['Saldo do Mes', `R$ ${saldo.toFixed(2)}`],
@@ -114,30 +122,22 @@ export default function Home() {
       headStyles: { fillColor: [99, 102, 241] },
       bodyStyles: { textColor: [40, 40, 40] },
       alternateRowStyles: { fillColor: [245, 245, 255] },
-      columnStyles: {
-        0: { fontStyle: 'normal' },
-        1: { halign: 'right', fontStyle: 'bold' }
-      },
+      columnStyles: { 0: { fontStyle: 'normal' }, 1: { halign: 'right', fontStyle: 'bold' } },
       didParseCell: (data) => {
-        if (data.row.index === 5 && data.column.index === 1) {
+        if (data.row.index === 6 && data.column.index === 1) {
           data.cell.styles.textColor = saldo >= 0 ? [16, 185, 129] : [239, 68, 68]
         }
       }
     })
 
-    // Receitas
     if (dadosExport.receitas.length > 0) {
       y = (doc as any).lastAutoTable.finalY + 12
       doc.setFontSize(13)
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(40, 40, 40)
       doc.text('Receitas', 14, y)
-
       const porCategoria: Record<string, number> = {}
-      dadosExport.receitas.forEach((x: any) => {
-        porCategoria[x.categoria] = (porCategoria[x.categoria] || 0) + x.valor
-      })
-
+      dadosExport.receitas.forEach((x: any) => { porCategoria[x.categoria] = (porCategoria[x.categoria] || 0) + x.valor })
       autoTable(doc, {
         startY: y + 4,
         head: [['Descricao', 'Categoria', 'Valor', 'Data']],
@@ -149,8 +149,6 @@ export default function Home() {
         foot: [['', 'Total', `R$ ${receitas.toFixed(2)}`, '']],
         footStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontStyle: 'bold' }
       })
-
-      // Receitas por categoria
       const cats = Object.entries(porCategoria)
       if (cats.length > 1) {
         y = (doc as any).lastAutoTable.finalY + 6
@@ -168,19 +166,14 @@ export default function Home() {
       }
     }
 
-    // Despesas
     if (dadosExport.despesas.length > 0) {
       y = (doc as any).lastAutoTable.finalY + 12
       doc.setFontSize(13)
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(40, 40, 40)
       doc.text('Despesas', 14, y)
-
       const porCategoria: Record<string, number> = {}
-      dadosExport.despesas.forEach((x: any) => {
-        porCategoria[x.categoria] = (porCategoria[x.categoria] || 0) + x.valor
-      })
-
+      dadosExport.despesas.forEach((x: any) => { porCategoria[x.categoria] = (porCategoria[x.categoria] || 0) + x.valor })
       autoTable(doc, {
         startY: y + 4,
         head: [['Descricao', 'Categoria', 'Valor', 'Data', 'Status']],
@@ -192,7 +185,6 @@ export default function Home() {
         foot: [['', '', `R$ ${despesas.toFixed(2)}`, 'Total', '']],
         footStyles: { fillColor: [239, 68, 68], textColor: [255, 255, 255], fontStyle: 'bold' }
       })
-
       const cats = Object.entries(porCategoria)
       if (cats.length > 1) {
         y = (doc as any).lastAutoTable.finalY + 6
@@ -210,13 +202,12 @@ export default function Home() {
       }
     }
 
-    // Contas a Pagar pendentes
     if (dadosExport.contas_pagar.length > 0) {
       y = (doc as any).lastAutoTable.finalY + 12
       doc.setFontSize(13)
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(40, 40, 40)
-      doc.text('Contas a Pagar (Pendentes)', 14, y)
+      doc.text('Contas a Pagar (Todas Pendentes)', 14, y)
       autoTable(doc, {
         startY: y + 4,
         head: [['Descricao', 'Valor', 'Vencimento']],
@@ -234,7 +225,6 @@ export default function Home() {
       })
     }
 
-    // Alertas de vencimento
     if (alertas.length > 0) {
       y = (doc as any).lastAutoTable.finalY + 12
       doc.setFontSize(13)
@@ -253,24 +243,23 @@ export default function Home() {
         headStyles: { fillColor: [234, 179, 8] },
         alternateRowStyles: { fillColor: [255, 253, 235] },
         columnStyles: { 1: { halign: 'right' } },
+        foot: [['Total 30 dias', `R$ ${aPagar30.toFixed(2)}`, '']],
+        footStyles: { fillColor: [234, 179, 8], textColor: [255, 255, 255], fontStyle: 'bold' }
       })
     }
 
-    // Salários dos sócios
     if (dadosExport.salarios.length > 0) {
       y = (doc as any).lastAutoTable.finalY + 12
       doc.setFontSize(13)
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(40, 40, 40)
       doc.text('Salarios dos Socios', 14, y)
-
       const socios = ['Caio', 'Charles', 'Bruno']
       const resumoSocios = socios.map(nome => {
         const sal = dadosExport.salarios.filter((x: any) => x.socio === nome && x.tipo === 'salario').reduce((a: number, x: any) => a + x.valor, 0)
         const vale = dadosExport.salarios.filter((x: any) => x.socio === nome && x.tipo === 'vale').reduce((a: number, x: any) => a + x.valor, 0)
         return [nome, `R$ ${sal.toFixed(2)}`, `R$ ${vale.toFixed(2)}`, `R$ ${(sal + vale).toFixed(2)}`]
       })
-
       autoTable(doc, {
         startY: y + 4,
         head: [['Socio', 'Salario', 'Vale', 'Total']],
@@ -282,8 +271,6 @@ export default function Home() {
         foot: [['Total Geral', `R$ ${totalSalarios.toFixed(2)}`, `R$ ${totalVales.toFixed(2)}`, `R$ ${(totalSalarios + totalVales).toFixed(2)}`]],
         footStyles: { fillColor: [167, 139, 250], textColor: [255, 255, 255], fontStyle: 'bold' }
       })
-
-      // Detalhamento individual
       y = (doc as any).lastAutoTable.finalY + 8
       doc.setFontSize(10)
       doc.setFont('helvetica', 'bold')
@@ -300,7 +287,6 @@ export default function Home() {
       })
     }
 
-    // Rodapé em todas as páginas
     const totalPages = (doc as any).internal.getNumberOfPages()
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i)
@@ -346,9 +332,12 @@ export default function Home() {
 
         {alertas.length > 0 && (
           <div className="bg-yellow-400/5 border border-yellow-400/20 rounded-2xl p-5 mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <Bell className="w-4 h-4 text-yellow-400" />
-              <p className="text-yellow-400 font-semibold text-sm">Vencem nos proximos 30 dias</p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-yellow-400" />
+                <p className="text-yellow-400 font-semibold text-sm">Vencem nos proximos 30 dias</p>
+              </div>
+              <span className="text-yellow-400 font-bold text-sm">R$ {aPagar30.toFixed(2)}</span>
             </div>
             <div className="space-y-2">
               {alertas.map(a => (
@@ -374,7 +363,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-3 gap-4 mb-4">
           {cards.map(card => {
             const Icon = card.icon
             return (
@@ -387,6 +376,20 @@ export default function Home() {
               </Link>
             )
           })}
+        </div>
+
+        {/* Card separado para vencimento 30 dias */}
+        <div className="bg-[#1a1d2e] border border-yellow-400/20 rounded-2xl p-5 mb-8 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-yellow-400/10 rounded-xl flex items-center justify-center">
+              <Bell className="w-5 h-5 text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-gray-400 text-sm">A Pagar nos proximos 30 dias</p>
+              <p className="text-yellow-400 text-2xl font-bold mt-0.5">R$ {aPagar30.toFixed(2)}</p>
+            </div>
+          </div>
+          <Link href="/contas-pagar" className="text-indigo-400 text-sm hover:text-indigo-300 transition-colors">Ver tudo</Link>
         </div>
 
         <div className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6">
