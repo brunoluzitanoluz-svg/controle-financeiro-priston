@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Pencil, X, Check } from 'lucide-react'
 
 type Despesa = {
   id: string
@@ -20,6 +20,7 @@ export default function Despesas() {
   const [categoria, setCategoria] = useState('')
   const [data, setData] = useState('')
   const [status, setStatus] = useState('pago')
+  const [editando, setEditando] = useState<Despesa | null>(null)
 
   async function carregar() {
     const { data } = await supabase.from('despesas').select('*').order('data', { ascending: false })
@@ -35,6 +36,19 @@ export default function Despesas() {
 
   async function remover(id: string) {
     await supabase.from('despesas').delete().eq('id', id)
+    carregar()
+  }
+
+  async function salvarEdicao() {
+    if (!editando) return
+    await supabase.from('despesas').update({
+      descricao: editando.descricao,
+      valor: editando.valor,
+      categoria: editando.categoria,
+      data: editando.data,
+      status: editando.status
+    }).eq('id', editando.id)
+    setEditando(null)
     carregar()
   }
 
@@ -54,6 +68,30 @@ export default function Despesas() {
             <p className="text-rose-400 text-sm mt-0.5">Total: R$ {total.toFixed(2)}</p>
           </div>
         </div>
+
+        {editando && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6 w-full max-w-md">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-semibold">Editar Despesa</h3>
+                <button onClick={() => setEditando(null)} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="space-y-3">
+                <input value={editando.descricao} onChange={e => setEditando({ ...editando, descricao: e.target.value })} placeholder="Descrição" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
+                <input value={editando.valor} onChange={e => setEditando({ ...editando, valor: parseFloat(e.target.value) })} type="number" placeholder="Valor" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
+                <input value={editando.categoria} onChange={e => setEditando({ ...editando, categoria: e.target.value })} placeholder="Categoria" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
+                <input value={editando.data} onChange={e => setEditando({ ...editando, data: e.target.value })} type="date" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
+                <select value={editando.status} onChange={e => setEditando({ ...editando, status: e.target.value })} className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                  <option value="pago">Pago</option>
+                  <option value="pendente">Pendente</option>
+                </select>
+                <button onClick={salvarEdicao} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-3 font-semibold flex items-center justify-center gap-2 transition-colors">
+                  <Check className="w-4 h-4" /> Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6 mb-6">
           <h2 className="text-white font-semibold mb-4">Nova Despesa</h2>
@@ -84,6 +122,9 @@ export default function Despesas() {
                   {d.status}
                 </span>
                 <span className="text-rose-400 font-semibold">R$ {d.valor.toFixed(2)}</span>
+                <button onClick={() => setEditando(d)} className="text-gray-600 hover:text-indigo-400 transition-colors">
+                  <Pencil className="w-4 h-4" />
+                </button>
                 <button onClick={() => remover(d.id)} className="text-gray-600 hover:text-rose-400 transition-colors">
                   <Trash2 className="w-4 h-4" />
                 </button>

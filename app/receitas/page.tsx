@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Pencil, X, Check } from 'lucide-react'
 
 type Receita = {
   id: string
@@ -18,6 +18,7 @@ export default function Receitas() {
   const [valor, setValor] = useState('')
   const [categoria, setCategoria] = useState('')
   const [data, setData] = useState('')
+  const [editando, setEditando] = useState<Receita | null>(null)
 
   async function carregar() {
     const { data } = await supabase.from('receitas').select('*').order('data', { ascending: false })
@@ -25,26 +26,26 @@ export default function Receitas() {
   }
 
   async function adicionar() {
-    if (!descricao) return
-    if (!valor) return
-    if (!categoria) return
-    if (!data) return
-    const { error } = await supabase.from('receitas').insert({
-      descricao,
-      valor: parseFloat(valor),
-      categoria,
-      data
-    })
-    if (error) { console.log('Erro:', error); return }
-    setDescricao('')
-    setValor('')
-    setCategoria('')
-    setData('')
+    if (!descricao || !valor || !categoria || !data) return
+    await supabase.from('receitas').insert({ descricao, valor: parseFloat(valor), categoria, data })
+    setDescricao(''); setValor(''); setCategoria(''); setData('')
     carregar()
   }
 
   async function remover(id: string) {
     await supabase.from('receitas').delete().eq('id', id)
+    carregar()
+  }
+
+  async function salvarEdicao() {
+    if (!editando) return
+    await supabase.from('receitas').update({
+      descricao: editando.descricao,
+      valor: editando.valor,
+      categoria: editando.categoria,
+      data: editando.data
+    }).eq('id', editando.id)
+    setEditando(null)
     carregar()
   }
 
@@ -64,10 +65,31 @@ export default function Receitas() {
             <p className="text-emerald-400 text-sm mt-0.5">Total: R$ {total.toFixed(2)}</p>
           </div>
         </div>
+
+        {editando && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6 w-full max-w-md">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-semibold">Editar Receita</h3>
+                <button onClick={() => setEditando(null)} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="space-y-3">
+                <input value={editando.descricao} onChange={e => setEditando({ ...editando, descricao: e.target.value })} placeholder="Descrição" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
+                <input value={editando.valor} onChange={e => setEditando({ ...editando, valor: parseFloat(e.target.value) })} type="number" placeholder="Valor" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
+                <input value={editando.categoria} onChange={e => setEditando({ ...editando, categoria: e.target.value })} placeholder="Categoria" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
+                <input value={editando.data} onChange={e => setEditando({ ...editando, data: e.target.value })} type="date" className="w-full bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
+                <button onClick={salvarEdicao} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-3 font-semibold flex items-center justify-center gap-2 transition-colors">
+                  <Check className="w-4 h-4" /> Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl p-6 mb-6">
           <h2 className="text-white font-semibold mb-4">Nova Receita</h2>
           <div className="grid grid-cols-2 gap-3">
-            <input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descricao" className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 col-span-2" />
+            <input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição" className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 col-span-2" />
             <input value={valor} onChange={e => setValor(e.target.value)} placeholder="Valor" type="number" className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500" />
             <input value={categoria} onChange={e => setCategoria(e.target.value)} placeholder="Categoria" className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500" />
             <input value={data} onChange={e => setData(e.target.value)} type="date" className="bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500" />
@@ -76,6 +98,7 @@ export default function Receitas() {
             </button>
           </div>
         </div>
+
         <div className="space-y-3">
           {receitas.map(r => (
             <div key={r.id} className="bg-[#1a1d2e] border border-[#2a2d3e] rounded-2xl px-6 py-4 flex items-center justify-between">
@@ -85,6 +108,9 @@ export default function Receitas() {
               </div>
               <div className="flex items-center gap-4">
                 <span className="text-emerald-400 font-semibold">R$ {r.valor.toFixed(2)}</span>
+                <button onClick={() => setEditando(r)} className="text-gray-600 hover:text-indigo-400 transition-colors">
+                  <Pencil className="w-4 h-4" />
+                </button>
                 <button onClick={() => remover(r.id)} className="text-gray-600 hover:text-rose-400 transition-colors">
                   <Trash2 className="w-4 h-4" />
                 </button>
